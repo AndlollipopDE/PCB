@@ -67,11 +67,11 @@ class ft_net(nn.Module):
         super(ft_net, self).__init__()
         model_ft = models.resnet50(pretrained=True)
         # avg pooling to global pooling
+        model_ft.avgpool = nn.AdaptiveAvgPool2d((1,1))
+        self.model = model_ft
         if stride == 1:
             self.model.layer4[0].downsample[0].stride = (1,1)
             self.model.layer4[0].conv2.stride = (1,1)
-        model_ft.avgpool = nn.AdaptiveAvgPool2d((1,1))
-        self.model = model_ft
         self.classifier = ClassBlock(2048, class_num, droprate)
 
     def forward(self, x):
@@ -152,7 +152,7 @@ class PCB(nn.Module):
         # define 6 classifiers
         for i in range(self.part):
             name = 'classifier'+str(i)
-            setattr(self, name, ClassBlock(2048, class_num, droprate=0.5, relu=False, bnorm=True, num_bottleneck=256))
+            setattr(self, name, ClassBlock(2048 + 1024, class_num, droprate=0.5, relu=False, bnorm=True, num_bottleneck=256))
 
     def forward(self, x):
         x = self.model.conv1(x)
@@ -162,9 +162,11 @@ class PCB(nn.Module):
         
         x = self.model.layer1(x)
         x = self.model.layer2(x)
-        x = self.model.layer3(x)
-        x = self.model.layer4(x)
+        x1 = self.model.layer3(x)
+        x = self.model.layer4(x1)
         x = self.avgpool(x)
+        x1 = self.avgpool(x1)
+        x = torch.cat((x1,x),dim = 1)
         x = self.dropout(x)
         part = {}
         predict = {}
